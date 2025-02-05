@@ -34,7 +34,7 @@ router.post('/tags', async (req, res) => {
 })
 
 // Deletar uma tag
-router.delete('/tags/:id', async (req, res) => {
+router.delete('/:id', async (req, res) => {
   const collection = getCollection()
   const _id = new ObjectId(req.params.id)
 

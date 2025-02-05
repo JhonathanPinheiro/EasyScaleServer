@@ -1,48 +1,61 @@
+require('dotenv').config() // Certifique-se de carregar as variáveis antes de tudo
+
 const express = require('express')
 const cors = require('cors')
 const mongoose = require('mongoose')
 const helmet = require('helmet')
 const rateLimit = require('express-rate-limit')
 
+const { connectToDB } = require('./database/db') // Certifique-se de que conecta corretamente ao MongoDB
+
 const app = express()
-
-const { connectToDB } = require('./database/db')
-
-require('dotenv').config()
 
 app.use(express.json())
 app.use(cors())
+app.use(helmet()) // Segurança com Helmet
 
-// Usando helmet para segurança
-app.use(helmet()) // Helmet ajuda a proteger contra algumas vulnerabilidades
-
-// Configurando rate-limiter
+// Limite de requisições por IP (proteção contra DDoS)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 100, // limite de 100 requisições por IP dentro de 15 minutos
+  max: 100, // Máximo de 100 requisições por IP nesse período
   message: 'Muitas requisições, tente novamente mais tarde.',
 })
 
-app.use(limiter) // Aplica a limitação de requisições globalmente
+app.use(limiter) // Aplica o rate-limit globalmente
 
+// Importação das rotas
 const tagsRoutes = require('./routes/tagsRoutes')
+const functionsRoutes = require('./routes/functionsRoutes')
+const generateScaleRoute = require('./routes/generateScaleRoute')
+const serviceDatesRoutes = require('./routes/serviceDatesRoutes')
+const volunteersRoutes = require('./routes/volunteersRoutes')
 const userRoutes = require('./routes/userRoutes')
 const authenticate = require('./middleware/authenticate')
 
 const port = process.env.PORT || 3001
 
-app.use('/api/auth', authenticate, tagsRoutes)
+// Rotas protegidas com autenticação
+app.use('/api/tags', authenticate, tagsRoutes)
+app.use('/api/volunteers', authenticate, volunteersRoutes)
+app.use('/api/functions', authenticate, functionsRoutes)
+app.use('/api/schedule', authenticate, generateScaleRoute)
+app.use('/api/service-dates', authenticate, serviceDatesRoutes)
+
+// Rotas públicas
 app.use('/api/users', userRoutes)
 
+// Rota raiz
+app.get('/', (req, res) => {
+  res.send('Hello World!')
+})
+
+// Iniciando o servidor e conectando ao banco de dados
 async function startServer() {
   try {
-    await connectToDB()
-    await mongoose.connect(process.env.MONGODB_URI)
+    await connectToDB() // Garante a conexão com o banco de dados
+
     console.log('Connected to MongoDB')
 
-    app.get('/', (req, res) => {
-      res.send('Hello World!')
-    })
     app.listen(port, () => {
       console.log(`Server is running on http://localhost:${port}`)
     })
