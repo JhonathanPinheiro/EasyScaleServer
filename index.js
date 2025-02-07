@@ -11,7 +11,14 @@ const { connectToDB } = require('./database/db') // Certifique-se de que conecta
 const app = express()
 
 app.use(express.json())
-app.use(cors())
+app.use(
+  cors({
+    origin: 'http://localhost:3000',
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+)
 app.use(helmet()) // Segurança com Helmet
 
 // Limite de requisições por IP (proteção contra DDoS)

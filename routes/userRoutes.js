@@ -2,7 +2,7 @@ const express = require('express')
 const router = express.Router()
 const { getConnectedClient } = require('../database/db')
 const { ObjectId } = require('mongodb')
-
+const authMiddleware = require('../middleware/authMiddleware')
 const bcrypt = require('bcrypt')
 const jwt = require('jsonwebtoken')
 require('dotenv').config()
@@ -93,6 +93,27 @@ router.post('/login', async (req, res) => {
       msg: 'Erro ao processar a solicitação. Tente mais tarde!',
       error: error.message,
     })
+  }
+})
+
+router.get('/me', authMiddleware, async (req, res) => {
+  const collection = getCollection()
+
+  try {
+    const user = await collection.findOne(
+      { _id: new ObjectId(req.userId) },
+      { projection: { password: 0 } } // Não retorna a senha
+    )
+
+    if (!user) {
+      return res.status(404).json({ msg: 'Usuário não encontrado!' })
+    }
+
+    res.status(200).json(user)
+  } catch (error) {
+    res
+      .status(500)
+      .json({ msg: 'Erro ao buscar usuário!', error: error.message })
   }
 })
 
