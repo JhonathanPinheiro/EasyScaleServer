@@ -5,11 +5,13 @@ const cors = require('cors')
 const mongoose = require('mongoose')
 const helmet = require('helmet')
 const rateLimit = require('express-rate-limit')
+const cookieParser = require('cookie-parser')
 
 const { connectToDB } = require('./database/db') // Certifique-se de que conecta corretamente ao MongoDB
 
 const app = express()
 
+app.use(cookieParser())
 app.use(express.json())
 app.use(
   cors({

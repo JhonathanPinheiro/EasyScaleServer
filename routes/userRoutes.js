@@ -64,36 +64,42 @@ router.post('/login', async (req, res) => {
     return res.status(422).json({ msg: 'Insira todos os dados!' })
   }
 
-  try {
-    const user = await collection.findOne({ email })
-    if (!user) {
-      return res.status(404).json({ msg: 'Usuário não encontrado!' })
-    }
-
-    const passMatch = await bcrypt.compare(password, user.password)
-    if (!passMatch) {
-      return res.status(401).json({ msg: 'Senha não corresponde!' })
-    }
-
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: '1h',
-    })
-
-    res.status(200).json({
-      msg: 'Login realizado com sucesso!',
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-      },
-    })
-  } catch (error) {
-    return res.status(500).json({
-      msg: 'Erro ao processar a solicitação. Tente mais tarde!',
-      error: error.message,
-    })
+  const user = await collection.findOne({ email })
+  if (!user) {
+    return res.status(401).json({ msg: 'Usuário não encontrado!' })
   }
+
+  const passwordMatch = await bcrypt.compare(password, user.password)
+  if (!passwordMatch) {
+    return res.status(401).json({ msg: 'Senha incorreta!' })
+  }
+
+  // 🔐 Gerar Token JWT
+  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+    expiresIn: '1d', // Token expira em 1 dia
+  })
+
+  // 🍪 Enviar Token via Cookie Seguro
+  res.cookie('token', token, {
+    httpOnly: true, // 🔒 Impede acesso via JavaScript
+    secure: process.env.NODE_ENV === 'production', // 🔐 Apenas HTTPS em produção
+    sameSite: 'Strict', // 🚫 Protege contra CSRF
+    maxAge: 24 * 60 * 60 * 1000, // ⏳ Expira em 1 dia
+  })
+
+  res.status(200).json({
+    msg: 'Login realizado com sucesso!',
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+    },
+  })
+})
+
+router.post('/logout', (req, res) => {
+  res.clearCookie('token')
+  res.status(200).json({ msg: 'Logout realizado com sucesso!' })
 })
 
 router.get('/me', authMiddleware, async (req, res) => {
