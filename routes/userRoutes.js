@@ -14,15 +14,10 @@ const getCollection = () => {
 
 router.post('/register', async (req, res) => {
   const collection = getCollection()
+  const { name, email, password } = req.body
 
-  const { name, email, password, confirmPassword } = req.body
-
-  if (!name || !email || !password || !confirmPassword) {
+  if (!name || !email || !password) {
     return res.status(422).json({ msg: 'Insira todos os dados!' })
-  }
-
-  if (password !== confirmPassword) {
-    return res.status(402).json({ msg: 'As senhas não conferem!' })
   }
 
   const userExists = await collection.findOne({ email })
@@ -34,18 +29,23 @@ router.post('/register', async (req, res) => {
     const salt = await bcrypt.genSalt(12)
     const passwordHash = await bcrypt.hash(password, salt)
 
-    const user = {
-      name,
-      email,
-      password: passwordHash,
-    }
-
+    const user = { name, email, password: passwordHash }
     const newUser = await collection.insertOne(user)
 
+    const token = jwt.sign(
+      { id: newUser.insertedId, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    )
+
     res.status(201).json({
-      id: newUser.insertedId,
-      name: user.name,
-      email: user.email,
+      msg: 'Usuário cadastrado com sucesso!',
+      token,
+      user: {
+        id: newUser.insertedId,
+        name: user.name,
+        email: user.email,
+      },
     })
   } catch (error) {
     console.log(error)
