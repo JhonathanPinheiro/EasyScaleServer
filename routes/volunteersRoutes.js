@@ -9,7 +9,7 @@ const getCollection = () => {
 }
 
 // Criar um voluntário
-router.post('/volunteers', async (req, res) => {
+router.post('/', async (req, res) => {
   const collection = getCollection()
   const { name, tags, availability, functions } = req.body
 
@@ -25,7 +25,7 @@ router.post('/volunteers', async (req, res) => {
       functions: functions || [],
     })
     res.status(201).json({
-      id: newVolunteer.insertedId,
+      id: newVolunteer.insertedId.toString(),
       name,
       tags,
       availability,
@@ -39,27 +39,31 @@ router.post('/volunteers', async (req, res) => {
 })
 
 // Listar voluntários
-router.get('/volunteers', async (req, res) => {
+router.get('/', async (req, res) => {
   const collection = getCollection()
-  const { tag, date, name } = req.query // Pegando filtros da query string
+  const { tag, date, name } = req.query
 
   let filter = {}
 
   if (tag) {
-    filter.tags = tag // Filtra por uma tag específica
+    filter.tags = tag
   }
 
   if (date) {
-    filter.availableDates = date // Filtra por uma data disponível
+    filter.availableDates = date
   }
 
   if (name) {
-    filter.name = { $regex: new RegExp(name, 'i') } // Filtra pelo nome (case insensitive)
+    filter.name = { $regex: new RegExp(name, 'i') }
   }
 
   try {
     const volunteers = await collection.find(filter).toArray()
-    res.status(200).json(volunteers)
+    const formattedVolunteers = volunteers.map(({ _id, ...rest }) => ({
+      id: _id.toString(),
+      ...rest,
+    }))
+    res.status(200).json(formattedVolunteers)
   } catch (error) {
     res
       .status(500)
@@ -68,18 +72,18 @@ router.get('/volunteers', async (req, res) => {
 })
 
 // Obter detalhes de um voluntário
-router.get('/volunteers/:id', async (req, res) => {
+router.get('/:id', async (req, res) => {
   const collection = getCollection()
   const _id = new ObjectId(req.params.id)
   const volunteer = await collection.findOne({ _id })
   if (!volunteer) {
     return res.status(404).json({ msg: 'Voluntário não encontrado!' })
   }
-  res.status(200).json(volunteer)
+  res.status(200).json({ id: volunteer._id.toString(), ...volunteer })
 })
 
 // Atualizar voluntário
-router.put('/volunteers/:id', async (req, res) => {
+router.put('/:id', async (req, res) => {
   const collection = getCollection()
   const _id = new ObjectId(req.params.id)
   const { name, tags, availability, functions } = req.body
@@ -94,7 +98,12 @@ router.put('/volunteers/:id', async (req, res) => {
     return res.status(404).json({ msg: 'Voluntário não encontrado!' })
   }
 
-  res.status(200).json(updatedVolunteer.value)
+  res
+    .status(200)
+    .json({
+      id: updatedVolunteer.value._id.toString(),
+      ...updatedVolunteer.value,
+    })
 })
 
 // Excluir voluntário

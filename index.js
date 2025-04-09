@@ -36,7 +36,6 @@ app.use(limiter) // Aplica o rate-limit globalmente
 const tagsRoutes = require('./routes/tagsRoutes')
 const functionsRoutes = require('./routes/functionsRoutes')
 const generateScaleRoute = require('./routes/generateScaleRoute')
-const serviceDatesRoutes = require('./routes/serviceDatesRoutes')
 const volunteersRoutes = require('./routes/volunteersRoutes')
 const userRoutes = require('./routes/userRoutes')
 const authenticate = require('./middleware/authenticate')
@@ -48,7 +47,6 @@ app.use('/api/tags', authenticate, tagsRoutes)
 app.use('/api/volunteers', authenticate, volunteersRoutes)
 app.use('/api/functions', authenticate, functionsRoutes)
 app.use('/api/schedule', authenticate, generateScaleRoute)
-app.use('/api/service-dates', authenticate, serviceDatesRoutes)
 
 // Rotas públicas
 app.use('/api/users', userRoutes)

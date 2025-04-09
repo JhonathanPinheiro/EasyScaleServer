@@ -2,15 +2,13 @@ const jwt = require('jsonwebtoken')
 require('dotenv').config()
 
 const authenticate = (req, res, next) => {
-  const tokenHeader = req.header('Authorization')
+  const token = req.cookies.token
 
-  if (!tokenHeader) {
+  if (!token) {
     return res
       .status(401)
       .json({ msg: 'Acesso negado! Nenhum token fornecido.' })
   }
-
-  const token = tokenHeader.replace('Bearer ', '')
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET)

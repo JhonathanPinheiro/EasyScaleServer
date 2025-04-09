@@ -1,4 +1,5 @@
 const express = require('express')
+const { ObjectId } = require('mongodb')
 const router = express.Router()
 const { getConnectedClient } = require('../database/db')
 
@@ -50,10 +51,11 @@ const generateSchedule = (volunteers, tags, serviceDates) => {
 }
 
 // Rota para gerar e salvar a escala
-router.post('/generate-schedule', async (req, res) => {
+router.post('/', async (req, res) => {
   const collection = getConnectedClient()
     .db('EasyScaleDb')
-    .collection('generatedSchedules')
+    .collection('generatedSchedules') // Certificando que a coleção está correta
+
   const { volunteers, tags, serviceDates } = req.body
 
   if (!volunteers || !tags || !serviceDates) {
@@ -82,21 +84,23 @@ router.post('/generate-schedule', async (req, res) => {
 })
 
 // Rota para obter todas as escalas geradas
-router.get('/schedules', async (req, res) => {
-  const collection = getCollection()
+router.get('/', async (req, res) => {
+  const collection = getConnectedClient()
+    .db('EasyScaleDb')
+    .collection('generatedSchedules') // Certificando que a coleção é a correta
+
   const { date, volunteer, tag } = req.query
 
   try {
     const filter = {}
 
     if (date) {
-      filter.date = date
+      filter['schedule.date'] = date // Certifique-se de que o formato da data está correto
     }
-    if (volunteer) {
-      filter['schedule.' + tag] = volunteer // Verifica se o voluntário está escalado para uma função
-    }
-    if (tag) {
-      filter[`schedule.${tag}`] = { $exists: true } // Verifica se a função existe na escala
+    if (volunteer && tag) {
+      filter[`schedule.${tag}`] = volunteer // Busca o voluntário apenas se a tag for informada
+    } else if (tag) {
+      filter[`schedule.${tag}`] = { $exists: true } // Busca escalas onde a tag existe
     }
 
     const schedules = await collection.find(filter).toArray()
@@ -108,8 +112,12 @@ router.get('/schedules', async (req, res) => {
   }
 })
 
+// Rota para excluir uma escala
 router.delete('/:id', async (req, res) => {
-  const collection = getCollection()
+  const collection = getConnectedClient()
+    .db('EasyScaleDb')
+    .collection('generatedSchedules')
+
   const _id = new ObjectId(req.params.id)
 
   try {
