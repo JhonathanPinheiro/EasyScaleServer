@@ -1,16 +1,19 @@
-const express = require('express')
-const router = express.Router()
-const { getConnectedClient } = require('../database/db')
-const { ObjectId } = require('mongodb')
-const authenticate = require('../middleware/authenticate')
+import { Router, Request, Response } from 'express'
+import { getConnectedClient } from '../database/db'
+import { ObjectId } from 'mongodb'
+import authenticate from '../middlewares/authenticate'
+
+const router = Router()
 
 const getCollection = () => {
   const client = getConnectedClient()
+  if (!client) {
+    throw new Error('Database client is not connected.')
+  }
   return client.db('EasyScaleDb').collection('functions')
 }
 
-// Criar uma nova função
-router.post('/functions', authenticate, async (req, res) => {
+router.post('/', authenticate, async (req: Request, res: Response) => {
   const collection = getCollection()
   const { name } = req.body
 
@@ -20,32 +23,40 @@ router.post('/functions', authenticate, async (req, res) => {
 
   try {
     const newFunction = await collection.insertOne({ name })
-    res
-      .status(201)
-      .json({ msg: 'Função criada com sucesso!', function: newFunction })
-  } catch (error) {
+    res.status(201).json({
+      msg: 'Função criada com sucesso!',
+      id: newFunction.insertedId.toString(),
+      name,
+    })
+  } catch (error: any) {
     res.status(500).json({ msg: 'Erro ao criar função.', error: error.message })
   }
 })
 
-// Listar todas as funções
-router.get('/functions', authenticate, async (req, res) => {
+router.get('/', authenticate, async (_req: Request, res: Response) => {
   const collection = getCollection()
   try {
     const functions = await collection.find({}).toArray()
-    res.status(200).json(functions)
-  } catch (error) {
+    const formatted = functions.map((func) => ({
+      id: func._id.toString(),
+      name: func.name,
+    }))
+    res.status(200).json(formatted)
+  } catch (error: any) {
     res
       .status(500)
       .json({ msg: 'Erro ao listar funções.', error: error.message })
   }
 })
 
-// Atualizar uma função por ID
-router.put('/functions/:id', authenticate, async (req, res) => {
+router.put('/:id', authenticate, async (req: Request, res: Response) => {
   const collection = getCollection()
   const { id } = req.params
   const { name } = req.body
+
+  if (!ObjectId.isValid(id)) {
+    return res.status(400).json({ msg: 'ID inválido!' })
+  }
 
   try {
     const updatedFunction = await collection.findOneAndUpdate(
@@ -53,35 +64,48 @@ router.put('/functions/:id', authenticate, async (req, res) => {
       { $set: { name } },
       { returnDocument: 'after' }
     )
+
+    if (!updatedFunction || !updatedFunction.value) {
+      return res.status(404).json({ msg: 'Função não encontrada.' })
+    }
+
     res.status(200).json({
       msg: 'Função atualizada com sucesso!',
-      function: updatedFunction,
+      function: {
+        id: updatedFunction.value._id.toString(),
+        name: updatedFunction.value.name,
+      },
     })
-  } catch (error) {
+  } catch (error: any) {
     res
       .status(500)
       .json({ msg: 'Erro ao atualizar função.', error: error.message })
   }
 })
 
-// Excluir uma função por ID
-router.delete('/:id', authenticate, async (req, res) => {
+router.delete('/:id', authenticate, async (req: Request, res: Response) => {
   const collection = getCollection()
   const { id } = req.params
+
+  if (!ObjectId.isValid(id)) {
+    return res.status(400).json({ msg: 'ID inválido!' })
+  }
 
   try {
     const deletedFunction = await collection.deleteOne({
       _id: new ObjectId(id),
     })
+
     if (!deletedFunction.deletedCount) {
       return res.status(404).json({ msg: 'Função não encontrada.' })
     }
+
     res.status(200).json({ msg: 'Função deletada com sucesso!' })
-  } catch (error) {
+  } catch (error: any) {
     res
       .status(500)
       .json({ msg: 'Erro ao deletar função.', error: error.message })
   }
 })
 
-module.exports = router
+export default router

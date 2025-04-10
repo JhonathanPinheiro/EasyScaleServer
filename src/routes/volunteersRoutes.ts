@@ -1,15 +1,18 @@
-const express = require('express')
-const router = express.Router()
-const { getConnectedClient } = require('../database/db')
-const { ObjectId } = require('mongodb')
+import { Router, Request, Response } from 'express'
+import { getConnectedClient } from '../database/db'
+import { ObjectId } from 'mongodb'
+
+const router = Router()
 
 const getCollection = () => {
   const client = getConnectedClient()
+  if (!client) {
+    throw new Error('Database client is not connected')
+  }
   return client.db('EasyScaleDb').collection('volunteers')
 }
 
-// Criar um voluntário
-router.post('/', async (req, res) => {
+router.post('/', async (req: Request, res: Response) => {
   const collection = getCollection()
   const { name, tags, availability, functions } = req.body
 
@@ -31,31 +34,22 @@ router.post('/', async (req, res) => {
       availability,
       functions,
     })
-  } catch (error) {
+  } catch (error: any) {
     res
       .status(500)
       .json({ msg: 'Erro ao criar voluntário', error: error.message })
   }
 })
 
-// Listar voluntários
-router.get('/', async (req, res) => {
+router.get('/', async (req: Request, res: Response) => {
   const collection = getCollection()
   const { tag, date, name } = req.query
 
-  let filter = {}
+  const filter: any = {}
 
-  if (tag) {
-    filter.tags = tag
-  }
-
-  if (date) {
-    filter.availableDates = date
-  }
-
-  if (name) {
-    filter.name = { $regex: new RegExp(name, 'i') }
-  }
+  if (tag) filter.tags = tag
+  if (date) filter.availableDates = date
+  if (name) filter.name = { $regex: new RegExp(name as string, 'i') }
 
   try {
     const volunteers = await collection.find(filter).toArray()
@@ -64,52 +58,66 @@ router.get('/', async (req, res) => {
       ...rest,
     }))
     res.status(200).json(formattedVolunteers)
-  } catch (error) {
+  } catch (error: any) {
     res
       .status(500)
       .json({ msg: 'Erro ao buscar voluntários', error: error.message })
   }
 })
 
-// Obter detalhes de um voluntário
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req: Request, res: Response) => {
   const collection = getCollection()
-  const _id = new ObjectId(req.params.id)
+  const { id } = req.params
+
+  if (!ObjectId.isValid(id)) {
+    return res.status(400).json({ msg: 'ID inválido!' })
+  }
+
+  const _id = new ObjectId(id)
   const volunteer = await collection.findOne({ _id })
+
   if (!volunteer) {
     return res.status(404).json({ msg: 'Voluntário não encontrado!' })
   }
+
   res.status(200).json({ id: volunteer._id.toString(), ...volunteer })
 })
 
-// Atualizar voluntário
-router.put('/:id', async (req, res) => {
+router.put('/:id', async (req: Request, res: Response) => {
   const collection = getCollection()
-  const _id = new ObjectId(req.params.id)
+  const { id } = req.params
   const { name, tags, availability, functions } = req.body
 
+  if (!ObjectId.isValid(id)) {
+    return res.status(400).json({ msg: 'ID inválido!' })
+  }
+
+  const _id = new ObjectId(id)
   const updatedVolunteer = await collection.findOneAndUpdate(
     { _id },
     { $set: { name, tags, availability, functions } },
     { returnDocument: 'after' }
   )
 
-  if (!updatedVolunteer.value) {
+  if (!updatedVolunteer || !updatedVolunteer.value) {
     return res.status(404).json({ msg: 'Voluntário não encontrado!' })
   }
 
-  res
-    .status(200)
-    .json({
-      id: updatedVolunteer.value._id.toString(),
-      ...updatedVolunteer.value,
-    })
+  res.status(200).json({
+    id: updatedVolunteer.value._id.toString(),
+    ...updatedVolunteer.value,
+  })
 })
 
-// Excluir voluntário
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req: Request, res: Response) => {
   const collection = getCollection()
-  const _id = new ObjectId(req.params.id)
+  const { id } = req.params
+
+  if (!ObjectId.isValid(id)) {
+    return res.status(400).json({ msg: 'ID inválido!' })
+  }
+
+  const _id = new ObjectId(id)
   const deletedVolunteer = await collection.deleteOne({ _id })
 
   if (!deletedVolunteer.deletedCount) {
@@ -119,4 +127,4 @@ router.delete('/:id', async (req, res) => {
   res.status(200).json({ msg: 'Voluntário excluído com sucesso!' })
 })
 
-module.exports = router
+export default router

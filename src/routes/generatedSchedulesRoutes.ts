@@ -1,14 +1,36 @@
-const express = require('express')
-const { ObjectId } = require('mongodb')
-const router = express.Router()
-const { getConnectedClient } = require('../database/db')
+import { Router, Request, Response } from 'express'
+import { ObjectId } from 'mongodb'
+import { getConnectedClient } from '../database/db'
 
-// Função para gerar a escala
-const generateSchedule = (volunteers, tags, serviceDates) => {
-  const schedule = serviceDates.map((date) => ({ date, schedule: {} }))
-  const assignedPeople = new Set()
+const router = Router()
 
-  const getAvailablePeople = (role, date, excludedNames = []) =>
+interface Volunteer {
+  name: string
+  tags: string[]
+  availability: string[]
+}
+
+type ScheduleEntry = {
+  date: string
+  schedule: Record<string, string>
+}
+
+const generateSchedule = (
+  volunteers: Volunteer[],
+  tags: string[],
+  serviceDates: string[]
+): ScheduleEntry[] => {
+  const schedule: ScheduleEntry[] = serviceDates.map((date) => ({
+    date,
+    schedule: {},
+  }))
+  const assignedPeople = new Set<string>()
+
+  const getAvailablePeople = (
+    role: string,
+    date: string,
+    excludedNames: string[] = []
+  ) =>
     volunteers.filter(
       (p) =>
         p.tags.includes(role) &&
@@ -16,7 +38,10 @@ const generateSchedule = (volunteers, tags, serviceDates) => {
         !excludedNames.includes(p.name)
     )
 
-  const selectPerson = (availablePeople, assignedPeople) =>
+  const selectPerson = (
+    availablePeople: Volunteer[],
+    assignedPeople: Set<string>
+  ) =>
     availablePeople.reduce((prev, curr) =>
       [...assignedPeople].filter((name) => name === prev.name).length <
       [...assignedPeople].filter((name) => name === curr.name).length
@@ -50,11 +75,12 @@ const generateSchedule = (volunteers, tags, serviceDates) => {
   return schedule
 }
 
-// Rota para gerar e salvar a escala
-router.post('/', async (req, res) => {
-  const collection = getConnectedClient()
-    .db('EasyScaleDb')
-    .collection('generatedSchedules') // Certificando que a coleção está correta
+router.post('/', async (req: Request, res: Response) => {
+  const client = getConnectedClient()
+  if (!client) {
+    return res.status(500).json({ msg: 'Erro ao conectar ao banco de dados!' })
+  }
+  const collection = client.db('EasyScaleDb').collection('generatedSchedules')
 
   const { volunteers, tags, serviceDates } = req.body
 
@@ -76,63 +102,72 @@ router.post('/', async (req, res) => {
       scheduleId: result.insertedId,
       schedule,
     })
-  } catch (error) {
+  } catch (error: any) {
     res
       .status(500)
       .json({ msg: 'Erro ao gerar ou salvar a escala!', error: error.message })
   }
 })
 
-// Rota para obter todas as escalas geradas
-router.get('/', async (req, res) => {
-  const collection = getConnectedClient()
-    .db('EasyScaleDb')
-    .collection('generatedSchedules') // Certificando que a coleção é a correta
+router.get('/', async (req: Request, res: Response) => {
+  const client = getConnectedClient()
+  if (!client) {
+    return res.status(500).json({ msg: 'Erro ao conectar ao banco de dados!' })
+  }
+  const collection = client.db('EasyScaleDb').collection('generatedSchedules')
 
   const { date, volunteer, tag } = req.query
 
   try {
-    const filter = {}
+    const filter: Record<string, any> = {}
 
     if (date) {
-      filter['schedule.date'] = date // Certifique-se de que o formato da data está correto
+      filter['schedule.date'] = date
     }
+
     if (volunteer && tag) {
-      filter[`schedule.${tag}`] = volunteer // Busca o voluntário apenas se a tag for informada
+      filter[`schedule.${tag}`] = volunteer
     } else if (tag) {
-      filter[`schedule.${tag}`] = { $exists: true } // Busca escalas onde a tag existe
+      filter[`schedule.${tag}`] = { $exists: true }
     }
 
     const schedules = await collection.find(filter).toArray()
     res.status(200).json(schedules)
-  } catch (error) {
+  } catch (error: any) {
     res
       .status(500)
       .json({ msg: 'Erro ao buscar escalas!', error: error.message })
   }
 })
 
-// Rota para excluir uma escala
-router.delete('/:id', async (req, res) => {
-  const collection = getConnectedClient()
-    .db('EasyScaleDb')
-    .collection('generatedSchedules')
+router.delete('/:id', async (req: Request, res: Response) => {
+  const client = getConnectedClient()
+  if (!client) {
+    return res.status(500).json({ msg: 'Erro ao conectar ao banco de dados!' })
+  }
+  const collection = client.db('EasyScaleDb').collection('generatedSchedules')
 
-  const _id = new ObjectId(req.params.id)
+  const id = req.params.id
+
+  if (!ObjectId.isValid(id)) {
+    return res.status(400).json({ msg: 'ID inválido!' })
+  }
 
   try {
-    const deletedSchedule = await collection.deleteOne({ _id })
+    const deletedSchedule = await collection.deleteOne({
+      _id: new ObjectId(id),
+    })
 
-    if (deletedSchedule.deletedCount === 0) {
+    if (!deletedSchedule.deletedCount) {
       return res.status(404).json({ msg: 'Escala não encontrada!' })
     }
 
     res.status(200).json({ msg: 'Escala excluída com sucesso!' })
-  } catch (error) {
+  } catch (error: any) {
     res
       .status(500)
       .json({ msg: 'Erro ao excluir escala!', error: error.message })
   }
 })
 
-module.exports = router
+export default router

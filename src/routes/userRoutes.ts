@@ -1,18 +1,24 @@
-const express = require('express')
-const router = express.Router()
-const { getConnectedClient } = require('../database/db')
-const { ObjectId } = require('mongodb')
-const authMiddleware = require('../middleware/authMiddleware')
-const bcrypt = require('bcrypt')
-const jwt = require('jsonwebtoken')
-require('dotenv').config()
+import { Router, Request, Response } from 'express'
+import { getConnectedClient } from '../database/db'
+import { ObjectId } from 'mongodb'
+const bcrypt = require('bcryptjs')
+import jwt from 'jsonwebtoken'
+import dotenv from 'dotenv'
+import authenticate from '../middlewares/authenticate'
+
+dotenv.config()
+
+const router = Router()
 
 const getCollection = () => {
   const client = getConnectedClient()
+  if (!client) {
+    throw new Error('Database client is not connected')
+  }
   return client.db('EasyScaleDb').collection('users')
 }
 
-router.post('/register', async (req, res) => {
+router.post('/register', async (req: Request, res: Response) => {
   const collection = getCollection()
   const { name, email, password } = req.body
 
@@ -34,7 +40,7 @@ router.post('/register', async (req, res) => {
 
     const token = jwt.sign(
       { id: newUser.insertedId, email: user.email },
-      process.env.JWT_SECRET,
+      process.env.JWT_SECRET as string,
       { expiresIn: '1h' }
     )
 
@@ -47,7 +53,7 @@ router.post('/register', async (req, res) => {
         email: user.email,
       },
     })
-  } catch (error) {
+  } catch (error: any) {
     console.log(error)
     res
       .status(400)
@@ -55,9 +61,8 @@ router.post('/register', async (req, res) => {
   }
 })
 
-router.post('/login', async (req, res) => {
+router.post('/login', async (req: Request, res: Response) => {
   const collection = getCollection()
-
   const { email, password } = req.body
 
   if (!email || !password) {
@@ -74,17 +79,15 @@ router.post('/login', async (req, res) => {
     return res.status(401).json({ msg: 'Senha incorreta!' })
   }
 
-  // 🔐 Gerar Token JWT
-  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-    expiresIn: '1d', // Token expira em 1 dia
+  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET as string, {
+    expiresIn: '1d',
   })
 
-  // 🍪 Enviar Token via Cookie Seguro
   res.cookie('token', token, {
-    httpOnly: true, // 🔒 Impede acesso via JavaScript
-    secure: process.env.NODE_ENV === 'production', // 🔐 Apenas HTTPS em produção
-    sameSite: 'Strict', // 🚫 Protege contra CSRF
-    maxAge: 24 * 60 * 60 * 1000, // ⏳ Expira em 1 dia
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 24 * 60 * 60 * 1000,
   })
 
   res.status(200).json({
@@ -97,18 +100,17 @@ router.post('/login', async (req, res) => {
   })
 })
 
-router.post('/logout', (req, res) => {
+router.post('/logout', (_req: Request, res: Response) => {
   res.clearCookie('token')
   res.status(200).json({ msg: 'Logout realizado com sucesso!' })
 })
 
-router.get('/me', authMiddleware, async (req, res) => {
+router.get('/me', authenticate, async (req: Request, res: Response) => {
   const collection = getCollection()
-
   try {
     const user = await collection.findOne(
-      { _id: new ObjectId(req.userId) },
-      { projection: { password: 0 } } // Não retorna a senha
+      { _id: new ObjectId((req as any).userId) },
+      { projection: { password: 0 } }
     )
 
     if (!user) {
@@ -116,14 +118,14 @@ router.get('/me', authMiddleware, async (req, res) => {
     }
 
     res.status(200).json(user)
-  } catch (error) {
+  } catch (error: any) {
     res
       .status(500)
       .json({ msg: 'Erro ao buscar usuário!', error: error.message })
   }
 })
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req: Request, res: Response) => {
   const collection = getCollection()
   const { id } = req.params
 
@@ -139,14 +141,14 @@ router.delete('/:id', async (req, res) => {
 
     await collection.deleteOne({ _id: new ObjectId(id) })
     res.status(200).json({ msg: 'Usuário deletado com sucesso!' })
-  } catch (error) {
+  } catch (error: any) {
     res
       .status(500)
       .json({ msg: 'Erro ao deletar usuário!', error: error.message })
   }
 })
 
-router.put('/users/:id', async (req, res) => {
+router.put('/users/:id', async (req: Request, res: Response) => {
   const collection = getCollection()
   const { id } = req.params
   const { name, email } = req.body
@@ -159,24 +161,24 @@ router.put('/users/:id', async (req, res) => {
     const updatedUser = await collection.findOneAndUpdate(
       { _id: new ObjectId(id) },
       { $set: { name, email } },
-      { returnDocument: 'after' } // Retorna o usuário atualizado
+      { returnDocument: 'after' }
     )
 
-    if (!updatedUser.value) {
+    if (!updatedUser || !updatedUser.value) {
       return res.status(404).json({ msg: 'Usuário não encontrado!' })
     }
 
     res
       .status(200)
       .json({ msg: 'Usuário atualizado!', user: updatedUser.value })
-  } catch (error) {
+  } catch (error: any) {
     res
       .status(500)
       .json({ msg: 'Erro ao atualizar usuário!', error: error.message })
   }
 })
 
-router.patch('/users/:id/password', async (req, res) => {
+router.patch('/users/:id/password', async (req: Request, res: Response) => {
   const collection = getCollection()
   const { id } = req.params
   const { newPassword } = req.body
@@ -199,11 +201,11 @@ router.patch('/users/:id/password', async (req, res) => {
     }
 
     res.status(200).json({ msg: 'Senha atualizada com sucesso!' })
-  } catch (error) {
+  } catch (error: any) {
     res
       .status(500)
       .json({ msg: 'Erro ao atualizar senha!', error: error.message })
   }
 })
 
-module.exports = router
+export default router
